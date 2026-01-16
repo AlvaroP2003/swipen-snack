@@ -1,3 +1,4 @@
+import ResponseModal from '@/components/ResponseModal';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from "expo-clipboard";
@@ -11,6 +12,10 @@ export default function JoinRoomScreen() {
   const [copied, setCopied] = useState(false);
   const [roomId, setRoomId] = useState('')
 
+  const [modalVisible,setModalVisible] = useState(false)
+  const [modalTitle,setModalTitle] = useState('')
+  const [modalMessage,setModalMessage] = useState('')
+
 
   // Generate random code
   const generateCode = async () => {
@@ -22,48 +27,70 @@ export default function JoinRoomScreen() {
   const copyToClipboard = async () => {
     await Clipboard.setStringAsync(uniqueCode);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500); // reset after 1.5s
+    setTimeout(() => setCopied(false), 2000);
   };
 
 
   // Creates Room
   useEffect(() => {
-    const createRoom = async () => {
-      try {
-        const code = await generateCode();
-        setUniqueCode(code)
+      const createRoom = async () => {
+        try {
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError) throw userError;
 
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
-        
-        if (userError) throw userError
+         // 1️⃣ Rate limit check: get all rooms by this user (most recent first)
+            const { data: rooms, error: roomsError } = await supabase
+              .from('rooms')
+              .select('created_at')
+              .eq('created_by', user.id)
+              .order('created_at', { ascending: false }); // newest first
 
-        // Create room
-        const { data: roomData, error: roomError } = await supabase
-          .from('rooms')
-          .insert({code, created_by: user.id})
-          .select()
-          .single();
+            if (roomsError) throw roomsError;
 
-        if (roomError) throw roomError;
+            // Take the most recent room
+            const lastRoom = rooms[0];
 
-        setRoomId(roomData.id)
+            const now = new Date();
+            const cooldown = 2 * 60 * 1000; // 2 minutes
 
-        // Add participant
-        const { error: participantError } = await supabase
-          .from('participants')
-          .insert([{ id: user.id, room_id: roomData.id}]);
-
-        if (participantError) throw participantError;
+            if (lastRoom && now - new Date(lastRoom.created_at) < cooldown) {
+              setModalTitle('Hold your horses!')
+              setModalMessage("You need to wait 2 minutes before creating another room.")
+              setModalVisible(true)
+              return; // stop room creation
+            }
 
 
+          // 2️⃣ Generate unique code
+          const code = await generateCode();
+          setUniqueCode(code);
 
-      } catch (err) {
-        console.error('Error creating room or participant:', err.message);
-      }
-    };
+         // 3️⃣ Create room
+            const { data: roomDataArray, error: roomError } = await supabase
+              .from('rooms')
+              .insert({ code, created_by: user.id })
+              .select();
+            if (roomError) throw roomError;
 
-    createRoom();
-  }, []);
+            const roomData = roomDataArray[0];
+            setRoomId(roomData.id);
+
+            // 4️⃣ Add participant
+            const { error: participantError } = await supabase
+              .from('participants')
+              .insert([{ user_id: user.id, room_id: roomData.id }]);
+            if (participantError) throw participantError;
+
+
+          console.log('Room created successfully:', roomData.id);
+
+        } catch (err) {
+          console.error('Error creating room or participant:', err.message);
+        }
+      };
+
+      createRoom();
+    }, []);
 
 
   // Deletes Room
@@ -135,6 +162,19 @@ useEffect(() => {
       <Text style={styles.subtitle}>
         {copied ? "Copied to clipboard!" : "Share this code with participant"}
       </Text>
+
+      <ResponseModal
+          visible={modalVisible}
+          title={modalTitle}
+          message={modalMessage}
+          onClose={() => {
+            setModalVisible(false)
+            setTimeout(() => router.back(), 500)
+          }
+        }
+          type='error'
+          buttonText='My Bad'
+        />
     </View>
   );
 }

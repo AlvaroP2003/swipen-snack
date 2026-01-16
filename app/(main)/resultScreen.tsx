@@ -1,8 +1,7 @@
 import { supabase } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -98,8 +97,8 @@ export default function ResultScreen() {
           if (!user) return;
 
           // 3️⃣ Separate your swipes from participant swipes
-          const myItems = data.filter(item => item.user_id === user.id);
-          const participantItems = data.filter(item => item.user_id !== user.id);
+          const myItems = data.filter(item => item.participant_id === user.id);
+          const participantItems = data.filter(item => item.participant_id !== user.id);
 
           if (myItems.length === 0 || participantItems.length === 0) {
             console.log("No match found - insufficient swipes");
@@ -221,7 +220,9 @@ export default function ResultScreen() {
             <Text style={styles.homeButtonText}>Return Home</Text>
           </TouchableOpacity>
 
-          <Animated.View style={[styles.modal, { top: slideAnim }]}>
+
+          {/* GOOGLE PLACES API WHICH WILL BE IMPLEMENTED LATER */}
+          {/* <Animated.View style={[styles.modal, { top: slideAnim }]}>
             <TouchableOpacity style={styles.modalHeader} onPress={toggleModal}>
               <Ionicons name="location" size={20} color="#ff0a54" />
               <Text style={styles.modalTitle}>Places near me</Text>
@@ -260,7 +261,7 @@ export default function ResultScreen() {
                 ))}
               </ScrollView>
             )}
-          </Animated.View>
+          </Animated.View> */}
         </View>
     )
 }

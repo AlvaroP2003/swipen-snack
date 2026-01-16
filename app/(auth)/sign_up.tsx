@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
+  Linking,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -30,6 +32,12 @@ export default function SignUpScreen({ onToggleAuthMode }: SignUpScreenProps) {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
   const [modalType, setModalType] = useState<'error' | 'success' | 'info'>('info');  
+
+   const [agreed, setAgreed] = useState(false);
+
+    const openUrl = (url: string) => {
+      Linking.openURL(url);
+    };
 
   // Helper function to show response modal
   const showResponseModal = (title: string, message: string, type: 'error' | 'success' | 'info' = 'info') => {
@@ -175,10 +183,28 @@ export default function SignUpScreen({ onToggleAuthMode }: SignUpScreenProps) {
         </View>
       </View>
 
+        <View style={styles.container}>
+          <Pressable style={styles.checkboxContainer} onPress={() => setAgreed(!agreed)}>
+            <View style={[styles.checkbox, agreed && styles.checked]}>
+              {agreed && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.label}>
+              I agree to the{' '}
+              <Text style={styles.link} onPress={() => openUrl('https://yourapp.com/terms')}>
+                Terms & Conditions
+              </Text>{' '}
+              and{' '}
+              <Text style={styles.link} onPress={() => openUrl('https://yourapp.com/privacy')}>
+                Privacy Policy
+              </Text>
+            </Text>
+          </Pressable>
+      </View>
+
       <TouchableOpacity 
         style={[styles.signUpButton, loading && styles.buttonDisabled]} 
         onPress={signUpWithEmail}
-        disabled={loading}
+        disabled={loading || !agreed}
       >
         <Text style={styles.signUpButtonText}>
           {loading ? 'Creating Account...' : 'Sign Up'}
@@ -310,4 +336,23 @@ const styles = StyleSheet.create({
     color: '#ff0a54',
     fontWeight: 'bold',
   },
+   container: { padding: 20 },
+    checkboxContainer: { flexDirection: 'row', alignItems: 'center' },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderWidth: 2,
+      borderColor: '#555',
+      borderRadius: 4,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 10,
+    },
+    checked: {
+      backgroundColor: '#ff0a54',
+      borderColor: '#ff0a54',
+    },
+    checkmark: { color: 'white', fontWeight: 'bold' },
+    label: { flex: 1, flexWrap: 'wrap' },
+    link: { color: 'blue', textDecorationLine: 'underline' },
 });

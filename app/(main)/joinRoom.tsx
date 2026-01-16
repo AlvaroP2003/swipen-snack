@@ -44,7 +44,7 @@ export default function JoinRoomScreen() {
 
       const { error: insertError } = await supabase
         .from('participants')
-        .insert({ id: userId, room_id: room.id });
+        .insert({ user_id: userId, room_id: room.id });
 
       if (insertError) throw insertError;
 
@@ -71,7 +71,7 @@ const handleJoinRoom = async () => {
   
   if (success) {
     console.log('Joined room', roomId);
-    router.push({
+    router.replace({
       pathname:"/(main)/gameScreen",
       params: {roomId: roomId}
     })

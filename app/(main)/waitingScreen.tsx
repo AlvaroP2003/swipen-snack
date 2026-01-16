@@ -11,6 +11,9 @@ export default function WaitingScreen() {
 
   useEffect(() => {
     const checkInitialStatus = async () => {
+
+      if(!roomId) return
+      
       const { data: participants } = await supabase
         .from('participants')
         .select('status')

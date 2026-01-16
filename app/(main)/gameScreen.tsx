@@ -24,6 +24,8 @@ export default function GameScreen() {
   const [showExitModal, setShowExitModal] = useState(false);
   const [index, setIndex] = useState(0);
 
+  const [participantId, setParticipantId] = useState<string | null>(null);
+
   const translateX = useSharedValue(0);
   const nextCardScale = useSharedValue(0.95);
   const nextCardTranslateY = useSharedValue(10);
@@ -71,7 +73,28 @@ export default function GameScreen() {
     fetchMeals();
   }, []);
 
+  useEffect(() => {
+  const fetchParticipant = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
+    const { data, error } = await supabase
+      .from('participants')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('room_id', roomId)
+      .single(); // you only want the one row
+
+    if (error) {
+      console.error('Error fetching participant');
+      return;
+    }
+
+    setParticipantId(data.id);
+  };
+
+  fetchParticipant();
+}, [roomId]);
 
   // Helper functions for buttons
   const swipeLeftAnimated = () => {
@@ -109,19 +132,19 @@ export default function GameScreen() {
   };
 
   const recordSwipe = async (meal: any, action: 'like' | 'disliked') => {
-    if (!meal) return;
+    if (!meal || !participantId) return;
     try {
-      await supabase.from('swipes').insert({ meal_id: meal.id, action });
+      await supabase.from('swipes').insert({ participant_id:participantId, meal_id: meal.id, action });
     } catch (err) {
       console.error(err);
     }
   };
 
-  const resetCardAnimation = () => {
-    translateX.value = 0;
-    nextCardScale.value = 0.95;
-    nextCardTranslateY.value = 10;
-  };
+    const resetCardAnimation = () => {
+      translateX.value = 0;
+      nextCardScale.value = withSpring(0.95);
+      nextCardTranslateY.value = withSpring(10);
+    };
 
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
@@ -161,7 +184,7 @@ export default function GameScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase.from('participants').update({ status: 'waiting' }).eq('id', user.id);
+    await supabase.from('participants').update({ status: 'waiting' }).eq('user_id', user.id);
 
     router.replace({
       pathname: '/waitingScreen',
@@ -182,15 +205,11 @@ export default function GameScreen() {
 
       <View style={styles.gameContainer}>
         {meals.slice(index + 1, index + 3).reverse().map((meal, i) => {
-
           return (
             <Animated.View
               key={meal.id}
-              style={[
-                styles.card,
-                styles.cardBehind,
-              ]}
-            >
+              style={[styles.card, styles.cardBehind, nextCardStyle]}
+              >
               <Image source={{ uri: meal.imageUrl }} style={styles.cardImage} />
               <View style={styles.nameContainer}>
                 <Text style={styles.name}>{meal.name}</Text>
@@ -198,6 +217,7 @@ export default function GameScreen() {
             </Animated.View>
           );
           })}
+
 
         {/* Top swipeable card */}
         {currentMeal && (

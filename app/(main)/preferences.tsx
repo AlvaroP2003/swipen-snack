@@ -2,10 +2,13 @@ import ResponseModal from '@/components/ResponseModal';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function PreferencesScreen() {
+
+  const router = useRouter()
 
   const [modalVisible,setModalVisible] = useState(false)
   const [modalTitle,setModalTitle] = useState('')
@@ -212,7 +215,11 @@ export default function PreferencesScreen() {
           visible={modalVisible}
           title={modalTitle}
           message={modalMessage}
-          onClose={() => setModalVisible(false)}
+          onClose={() => {
+            setModalVisible(false)
+            setTimeout(() => router.back(), 500)
+          }
+        }
           type={modalType}
           buttonText = 'OK'
         />
