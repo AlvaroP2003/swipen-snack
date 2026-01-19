@@ -1,85 +1,47 @@
-import { supabase } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
+import { supabase } from "@/lib/supabase";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef } from "react";
+import { Animated, Easing, Image, StyleSheet, Text, View } from "react-native";
 
 export default function WaitingScreen() {
-
-  const router = useRouter()
-  const {roomId} = useLocalSearchParams()
+  const router = useRouter();
+  const { roomId } = useLocalSearchParams();
 
   useEffect(() => {
-    const checkInitialStatus = async () => {
+    if (!roomId) return;
 
-      if(!roomId) return
-      
-      const { data: participants } = await supabase
-        .from('participants')
-        .select('status')
-        .eq('room_id', roomId);
+    // 1️⃣ Ask the DB: "Is the room ready?"
+    supabase.rpc("finish_room_if_ready", {
+      p_room_id: roomId,
+    });
 
-      const allDone = (participants || []).every(p => p.status === 'waiting');
-
-      if (allDone) {
-        await supabase
-          .from('rooms')
-          .update({ status: 'finished', updated_at: new Date() })
-          .eq('id', roomId);
-
-        router.replace({
-          pathname: '/resultScreen',
-          params: { roomId },
-        });
-      }
-    };
-
-
-    // Check immediately on entering screen
-    checkInitialStatus();
-
-    // Now subscribe for future updates
+    // 2️⃣ Listen for the authoritative state change
     const channel = supabase
       .channel(`room-${roomId}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'participants',
-          filter: `room_id=eq.${roomId}`,
+          event: "UPDATE",
+          schema: "public",
+          table: "rooms",
+          filter: `id=eq.${roomId}`,
         },
-        async () => {
-          const { data: participants } = await supabase
-            .from('participants')
-            .select('status')
-            .eq('room_id', roomId);
-
-          const allDone = (participants || []).every(p => p.status === 'waiting');
-
-          if (allDone) {
-            await supabase
-              .from('rooms')
-              .update({ status: 'finished', updated_at: new Date() })
-              .eq('id', roomId);
-
+        (payload) => {
+          if (payload.new.status === "finished") {
             router.replace({
-              pathname: '/resultScreen',
+              pathname: "/resultScreen",
               params: { roomId },
             });
           }
-        }
+        },
       )
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [roomId]);
-
-
-
 
   const rotateAnim = useRef(new Animated.Value(0)).current;
 

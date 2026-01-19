@@ -3,14 +3,19 @@ import { useRouter } from "expo-router";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function Homescreen() {
-
-  const router = useRouter()
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
       <Header />
-      <Image style={styles.image} source={require("../../assets/images/adaptive-icon.png")} />
-      <TouchableOpacity style={styles.joinContainer} onPress={() => router.push("/(main)/joinRoom")}>
+      <Image
+        style={styles.image}
+        source={require("../../assets/images/adaptive-icon.png")}
+      />
+      <TouchableOpacity
+        style={styles.joinContainer}
+        onPress={() => router.push("/(main)/joinRoom")}
+      >
         <Text style={styles.joinText}>JOIN ROOM</Text>
       </TouchableOpacity>
 
@@ -20,24 +25,26 @@ export default function Homescreen() {
         <View style={styles.orLine} />
       </View>
 
-      <TouchableOpacity style={styles.createContainer} onPress={() => router.push("/(main)/createRoom")}>
+      <TouchableOpacity
+        style={styles.createContainer}
+        onPress={() => router.push("/(main)/gameScreen")}
+      >
         <Text style={styles.createText}>CREATE ROOM</Text>
       </TouchableOpacity>
     </View>
-  )
+  );
 }
-
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
     backgroundColor: "#ff0a54",
-    alignItems: "center"
+    alignItems: "center",
   },
   image: {
     width: 550,
-    height: 125
+    height: 125,
   },
   joinContainer: {
     color: "white",
@@ -45,7 +52,7 @@ const styles = StyleSheet.create({
     borderColor: "white",
     height: 50,
     width: 200,
-    display:'flex',
+    display: "flex",
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 50,
@@ -63,7 +70,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     height: 50,
     width: 200,
-    display:'flex',
+    display: "flex",
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 50,
@@ -88,5 +95,5 @@ const styles = StyleSheet.create({
     height: 2,
     width: 50,
     backgroundColor: "white",
-  }
-})
+  },
+});
