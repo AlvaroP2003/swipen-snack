@@ -1,88 +1,92 @@
-import ResponseModal from '@/components/ResponseModal';
-import { supabase } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
+import ResponseModal from "@/components/ResponseModal";
+import { supabase } from "@/lib/supabase";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export default function JoinRoomScreen() {
-
   const router = useRouter();
-  const [uniqueCode,setUniqueCode] = useState('')
-  const [user,setUser]  = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [uniqueCode, setUniqueCode] = useState("");
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Response Modal state
-  const [modalVisible,setModalVisible] = useState(false)
-  const [modalTitle,setModalTitle] = useState('')
-  const [modalMessage,setModalMessage] = useState('')
-  const [modaltype,setModalType] = useState('')
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalMessage, setModalMessage] = useState("");
+  const [modaltype, setModalType] = useState("");
 
   useEffect(() => {
-     const getUser = async () => {
-      const { data, error } = await supabase.auth.getUser()
+    const getUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.error('Error fetching user:', error.message)
+        console.error("Error fetching user:", error.message);
       } else {
-        setUser(data.user)
+        setUser(data.user);
       }
-    }
-    getUser()
-  },[])
+    };
+    getUser();
+  }, []);
 
   const joinRoom = async (code: string, userId: string) => {
-
     try {
       const { data: room, error: roomError } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('code', code)
-        .maybeSingle()
+        .from("rooms")
+        .select("*")
+        .eq("code", code)
+        .maybeSingle();
 
       if (roomError) throw roomError;
-      if (!room) throw new Error('Room not found');
+      if (!room) throw new Error("Room not found");
 
       const { error: insertError } = await supabase
-        .from('participants')
+        .from("participants")
         .insert({ user_id: userId, room_id: room.id });
 
       if (insertError) throw insertError;
 
       return { success: true, roomId: room.id };
     } catch (err) {
-      console.error('Join room error:', err);
+      console.error("Join room error:", err);
       return { success: false, message: err.message };
     }
   };
 
-const handleJoinRoom = async () => {
+  const handleJoinRoom = async () => {
+    if (!uniqueCode) {
+      setModalVisible(true);
+      setModalTitle("Missing value");
+      setModalMessage("Please enter a value as a code");
+      setModalType("error");
+      return;
+    }
 
-  if(!uniqueCode) {
-    setModalVisible(true)
-    setModalTitle('Missing value')
-    setModalMessage('Please enter a value as a code')
-    setModalType('error')
-    return
-  }
-  
-  setIsLoading(true)
-  const { success, roomId, message } = await joinRoom(uniqueCode, user.id);
-  setIsLoading(false)
-  
-  if (success) {
-    console.log('Joined room', roomId);
-    router.replace({
-      pathname:"/(main)/gameScreen",
-      params: {roomId: roomId}
-    })
-    setUniqueCode('')
-  } else {
-    setModalVisible(true)
-    setModalTitle('No Room Found')
-    setModalMessage('No room could be found that matches the entered code')
-    setModalType('error')
-  }
-};
+    setIsLoading(true);
+    const { success, roomId, message } = await joinRoom(uniqueCode, user.id);
+    setIsLoading(false);
+
+    if (success) {
+      console.log("Joined room", roomId);
+      router.replace({
+        pathname: "/(main)/gameScreen",
+        params: { roomId: roomId },
+      });
+      setUniqueCode("");
+    } else {
+      setModalVisible(true);
+      setModalTitle("No Room Found");
+      setModalMessage("No room could be found that matches the entered code");
+      setModalType("error");
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -92,36 +96,40 @@ const handleJoinRoom = async () => {
       </TouchableOpacity>
 
       <Text style={styles.title}>ENTER UNIQUE CODE</Text>
-      <TextInput 
+      <TextInput
         maxLength={6}
         style={styles.input}
         value={uniqueCode}
         onChangeText={setUniqueCode}
         placeholder="XXXXXX"
-        autoCapitalize='characters'
-        placeholderTextColor="#ffffff9d" />
-      <Text style={styles.subtitle}>We've sent a code to the host</Text>
+        autoCapitalize="characters"
+        placeholderTextColor="#ffffff9d"
+      />
+      <Text style={styles.subtitle}>Enter other participants room code</Text>
 
-       <TouchableOpacity 
-         style={[styles.confirmContainer, isLoading && styles.confirmContainerDisabled]} 
-         onPress={() => handleJoinRoom()}
-         disabled={isLoading}
-       >
-         {isLoading ? (
-           <ActivityIndicator size="small" color="#ff0a54" />
-         ) : (
-           <Text style={styles.confirmText}>CONFIRM</Text>
-         )}
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          styles.confirmContainer,
+          isLoading && styles.confirmContainerDisabled,
+        ]}
+        onPress={() => handleJoinRoom()}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <ActivityIndicator size="small" color="#ff0a54" />
+        ) : (
+          <Text style={styles.confirmText}>CONFIRM</Text>
+        )}
+      </TouchableOpacity>
 
-        <ResponseModal
-          visible={modalVisible}
-          title={modalTitle}
-          message={modalMessage}
-          onClose={() => setModalVisible(false)}
-          type={modaltype}
-          buttonText={'OK'}
-         />
+      <ResponseModal
+        visible={modalVisible}
+        title={modalTitle}
+        message={modalMessage}
+        onClose={() => setModalVisible(false)}
+        type={modaltype}
+        buttonText={"OK"}
+      />
     </View>
   );
 }
@@ -134,22 +142,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#ff0a54",
   },
   backButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 50,
     left: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderWidth:2,
-    borderColor: 'white',
+    borderWidth: 2,
+    borderColor: "white",
     borderRadius: 10,
   },
   backText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
     marginLeft: 5,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   title: {
     fontSize: 24,
@@ -184,7 +192,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     height: 50,
     width: 200,
-    display:'flex',
+    display: "flex",
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 50,

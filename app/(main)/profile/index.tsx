@@ -1,4 +1,4 @@
-import ConfirmModal from "@/components/ConfirmModal"; // <-- your modal
+import ConfirmModal from "@/components/ConfirmModal";
 import ScreenHeader from "@/components/ui/ScreenHeader";
 import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +18,7 @@ export default function Profile() {
   const [user, setUser] = useState(null);
   const [initials, setInitials] = useState("U");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function Profile() {
   }, []);
 
   const handleLogout = async () => {
+    setShowLogoutModal(false);
     await supabase.auth.signOut();
     router.replace("/(auth)");
   };
@@ -53,7 +55,7 @@ export default function Profile() {
   const handleDeleteAccount = async () => {
     setShowDeleteModal(false);
     try {
-      // ⚠️ For production, use a secure server-side function
+      // ⚠️ Use a secure server-side function in production
       const { error } = await supabase.auth.admin.deleteUser(user.id);
       if (error) throw error;
       router.replace("/(auth)");
@@ -112,31 +114,42 @@ export default function Profile() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.actionButton, styles.logoutButton]}
-              onPress={handleLogout}
-            >
-              <Text style={[styles.actionText, { color: "white" }]}>
-                Logout
-              </Text>
-              <Ionicons name="log-out-outline" size={20} color="white" />
-            </TouchableOpacity>
-
+            {/* Logout – outlined */}
             <TouchableOpacity
               style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => setShowLogoutModal(true)}
+            >
+              <Text style={styles.deleteText}>Logout</Text>
+              <Ionicons name="log-out-outline" size={20} color="#ff0a54" />
+            </TouchableOpacity>
+
+            {/* Delete Account – red filled */}
+            <TouchableOpacity
+              style={[styles.actionButton, styles.logoutButton]}
               onPress={() => setShowDeleteModal(true)}
             >
-              <Text style={[styles.deleteText]}>Delete Account</Text>
-              <Ionicons name="trash-outline" size={20} color="#ff0a54" />
+              <Text style={[styles.actionText, { color: "white" }]}>
+                Delete Account
+              </Text>
+              <Ionicons name="trash-outline" size={20} color="white" />
             </TouchableOpacity>
           </View>
         </>
       )}
 
-      {/* ConfirmModal for delete confirmation */}
+      <ConfirmModal
+        visible={showLogoutModal}
+        title="Bye, I guess"
+        message="Are you sure you want to logout?"
+        confirmText="Logout"
+        cancelText="Cancel"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutModal(false)}
+      />
+
       <ConfirmModal
         visible={showDeleteModal}
-        title="Confirm Account Deletion"
+        title="Are you sure about that?"
         message="Are you sure you want to delete your account? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
@@ -150,6 +163,7 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "white",
   },
   loadingContainer: {
     flex: 1,
@@ -212,7 +226,6 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderWidth: 2,
     borderColor: "#ff0a54",
-    marginTop: 10,
   },
   deleteText: {
     color: "#ff0a54",

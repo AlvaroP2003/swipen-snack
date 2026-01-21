@@ -32,14 +32,15 @@ export default function GameScreen() {
   const [loading, setLoading] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [index, setIndex] = useState(0);
-
   const [participantId, setParticipantId] = useState<string | null>(null);
 
+  // Animated values for current card only
   const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
   const nextCardScale = useSharedValue(0.95);
   const nextCardTranslateY = useSharedValue(10);
 
-  // Fetch meals on mount
+  // Fetch meals
   useEffect(() => {
     const fetchMeals = async () => {
       setLoading(true);
@@ -62,8 +63,7 @@ export default function GameScreen() {
         const filteredMeals =
           allMeals?.filter((meal: any) => {
             const mealPreferences = meal.preferences || [];
-            if (!userPreferences.length) return true;
-            if (!mealPreferences.length) return true;
+            if (!userPreferences.length || !mealPreferences.length) return true;
             return mealPreferences.some((p: string) =>
               userPreferences.includes(p),
             );
@@ -83,10 +83,10 @@ export default function GameScreen() {
         setLoading(false);
       }
     };
-
     fetchMeals();
   }, []);
 
+  // Fetch participant ID
   useEffect(() => {
     const fetchParticipant = async () => {
       const {
@@ -99,52 +99,21 @@ export default function GameScreen() {
         .select("id")
         .eq("user_id", user.id)
         .eq("room_id", roomId)
-        .single(); // you only want the one row
+        .single();
 
-      if (error) {
-        console.error("Error fetching participant");
-        return;
-      }
+      if (error) return console.error("Error fetching participant");
 
       setParticipantId(data.id);
     };
-
     fetchParticipant();
   }, [roomId]);
 
-  // Helper functions for buttons
-  const swipeLeftAnimated = () => {
-    translateX.value = withSpring(-OFFSCREEN, {}, () => runOnJS(swipeLeft)());
-  };
-
-  const swipeRightAnimated = () => {
-    translateX.value = withSpring(OFFSCREEN, {}, () => runOnJS(swipeRight)());
-  };
-
-  const swipeLeft = () => {
+  // Swipe logic
+  const swipe = (direction: "left" | "right") => {
     if (!currentMeal) return;
-    recordSwipe(currentMeal, "disliked");
-
-    // Wait until animation finishes
-    setIndex((prev) => prev + 1);
-    // Reset translateX AFTER a tiny delay so Reanimated has the next card rendered
-    translateX.value = 0;
-    nextCardScale.value = withSpring(0.95);
-    nextCardTranslateY.value = withSpring(10);
-
-    if (index >= meals.length - 1) {
-      runOnJS(onSwipedAll)();
-    }
-  };
-
-  const swipeRight = () => {
-    if (!currentMeal) return;
-    recordSwipe(currentMeal, "like");
+    recordSwipe(currentMeal, direction === "left" ? "disliked" : "like");
 
     setIndex((prev) => prev + 1);
-    translateX.value = 0;
-    nextCardScale.value = withSpring(0.95);
-    nextCardTranslateY.value = withSpring(10);
 
     if (index >= meals.length - 1) {
       runOnJS(onSwipedAll)();
@@ -162,15 +131,12 @@ export default function GameScreen() {
     }
   };
 
-  const resetCardAnimation = () => {
-    translateX.value = 0;
-    nextCardScale.value = withSpring(0.95);
-    nextCardTranslateY.value = withSpring(10);
-  };
-
+  // Pan gesture
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
       translateX.value = e.translationX;
+      translateY.value = e.translationY;
+
       const progress = Math.min(
         Math.abs(translateX.value) / SWIPE_THRESHOLD,
         1,
@@ -180,23 +146,34 @@ export default function GameScreen() {
     })
     .onEnd(() => {
       if (translateX.value > SWIPE_THRESHOLD) {
-        translateX.value = withSpring(OFFSCREEN, {}, () =>
-          runOnJS(swipeRight)(),
-        );
+        translateX.value = withSpring(OFFSCREEN, {}, () => {
+          runOnJS(swipe)("right");
+          translateX.value = 0;
+          translateY.value = 0;
+          nextCardScale.value = 0.95;
+          nextCardTranslateY.value = 10;
+        });
       } else if (translateX.value < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(-OFFSCREEN, {}, () =>
-          runOnJS(swipeLeft)(),
-        );
+        translateX.value = withSpring(-OFFSCREEN, {}, () => {
+          runOnJS(swipe)("left");
+          translateX.value = 0;
+          translateY.value = 0;
+          nextCardScale.value = 0.95;
+          nextCardTranslateY.value = 10;
+        });
       } else {
         translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
         nextCardScale.value = withSpring(0.95);
         nextCardTranslateY.value = withSpring(10);
       }
     });
 
+  // Animated styles
   const topCardStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
+      { translateY: translateY.value },
       { rotate: `${translateX.value / 15}deg` },
     ],
   }));
@@ -220,14 +197,10 @@ export default function GameScreen() {
       .update({ status: "waiting" })
       .eq("user_id", user.id);
 
-    router.replace({
-      pathname: "/waitingScreen",
-      params: { roomId },
-    });
+    router.replace({ pathname: "/waitingScreen", params: { roomId } });
   };
 
   const currentMeal = meals[index];
-  const nextMeal = index < meals.length - 1 ? meals[index + 1] : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -246,13 +219,23 @@ export default function GameScreen() {
         <>
           <View style={styles.gameContainer}>
             {meals
-              .slice(index + 1, index + 3)
-              .reverse()
+              .slice(index, index + 2)
+              .reverse() // so top card renders on top
               .map((meal, i) => {
-                return (
+                const isTop = i === 1; // after reverse(), last item is top
+
+                // Only apply animated style to the top card
+                // Next card gets static initial positioning
+                const animStyle = isTop ? topCardStyle : nextCardStyle;
+
+                const CardContent = (
                   <Animated.View
-                    key={meal.id}
-                    style={[styles.card, styles.cardBehind, nextCardStyle]}
+                    key={`${meal.id}-${index}`}
+                    style={[
+                      styles.card,
+                      isTop ? styles.cardTop : styles.cardBehind,
+                      animStyle,
+                    ]}
                   >
                     <Image
                       source={{ uri: meal.imageUrl }}
@@ -263,30 +246,24 @@ export default function GameScreen() {
                     </View>
                   </Animated.View>
                 );
-              })}
 
-            {/* Top swipeable card */}
-            {currentMeal && (
-              <GestureDetector gesture={panGesture}>
-                <Animated.View
-                  style={[styles.card, styles.cardTop, topCardStyle]}
-                >
-                  <Image
-                    source={{ uri: currentMeal.imageUrl }}
-                    style={styles.cardImage}
-                  />
-                  <View style={styles.nameContainer}>
-                    <Text style={styles.name}>{currentMeal.name}</Text>
-                  </View>
-                </Animated.View>
-              </GestureDetector>
-            )}
+                return isTop ? (
+                  <GestureDetector
+                    key={`${meal.id}-${index}`}
+                    gesture={panGesture}
+                  >
+                    {CardContent}
+                  </GestureDetector>
+                ) : (
+                  CardContent
+                );
+              })}
           </View>
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={styles.iconContainer}
-              onPress={swipeLeftAnimated}
+              onPress={() => swipe("left")}
             >
               <Ionicons name="close" size={40} color="#ff0a54" />
             </TouchableOpacity>
@@ -300,7 +277,7 @@ export default function GameScreen() {
 
             <TouchableOpacity
               style={styles.iconContainer}
-              onPress={swipeRightAnimated}
+              onPress={() => swipe("right")}
             >
               <Ionicons name="heart" size={40} color="#ff0a54" />
             </TouchableOpacity>
@@ -325,52 +302,24 @@ export default function GameScreen() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  container: {
-    position: "relative",
-    flex: 1,
-    backgroundColor: "#ff0a54",
-  },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  container: { flex: 1, backgroundColor: "#ff0a54" },
   image: {
     marginTop: 10,
     width: 380,
     height: height * 0.1,
     alignSelf: "center",
   },
-  gameContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  gameContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   card: {
-    height: height * 0.7,
+    height: "90%",
     width: width * 0.9,
-    borderRadius: 20,
-    backgroundColor: "#ffffff",
-  },
-  cardImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 20,
-  },
-  cardBehind: {
-    zIndex: 1,
-    position: "absolute",
-    top: 0,
-    bottom: 0,
     borderRadius: 20,
     backgroundColor: "#fff",
   },
-  cardTop: {
-    zIndex: 2,
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-  },
+  cardImage: { width: "100%", height: "100%", borderRadius: 20 },
+  cardBehind: { zIndex: 1, position: "absolute", top: 0, bottom: 0 },
+  cardTop: { zIndex: 2, position: "absolute", top: 0, bottom: 0 },
   nameContainer: {
     backgroundColor: "white",
     height: "10%",
@@ -397,14 +346,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   buttonContainer: {
-    position: "absolute",
-    bottom: 75,
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 25,
     width: "100%",
     alignItems: "center",
-    zIndex: 10,
   },
   iconContainer: {
     backgroundColor: "white",
