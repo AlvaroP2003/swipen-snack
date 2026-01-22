@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Swipe Snack needs access to your location to show nearby restaurants and food options.",
+        "NSLocationAlwaysUsageDescription": "Swipe Snack needs access to your location to show nearby restaurants."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,11 +22,16 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.alvaroplacido2003.swipesnack"
+      "package": "com.alvaroplacido2003.swipesnack",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/adaptive-icon.png"
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#ff0a54",
+      "barStyle": "light-content"
     },
     "plugins": [
       "expo-router",
@@ -36,6 +45,16 @@
           "dark": {
             "backgroundColor": "#ff0a54"
           }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Swipe Snack to use your location to show nearby restaurants and food options.",
+          "locationWhenInUsePermission": "Allow Swipe Snack to use your location to show nearby restaurants and food options.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
         }
       ]
     ],

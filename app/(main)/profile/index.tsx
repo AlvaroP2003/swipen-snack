@@ -96,6 +96,14 @@ export default function Profile() {
 
             <TouchableOpacity
               style={styles.actionButton}
+              onPress={() => router.push("/profile/settings")}
+            >
+              <Text style={styles.actionText}>Settings</Text>
+              <Ionicons name="cog" size={20} color="#646464" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
               onPress={() => Linking.openURL("https://yourdomain.com/privacy")}
             >
               <Text style={styles.actionText}>Privacy Policy</Text>
@@ -121,17 +129,6 @@ export default function Profile() {
             >
               <Text style={styles.deleteText}>Logout</Text>
               <Ionicons name="log-out-outline" size={20} color="#ff0a54" />
-            </TouchableOpacity>
-
-            {/* Delete Account – red filled */}
-            <TouchableOpacity
-              style={[styles.actionButton, styles.logoutButton]}
-              onPress={() => setShowDeleteModal(true)}
-            >
-              <Text style={[styles.actionText, { color: "white" }]}>
-                Delete Account
-              </Text>
-              <Ionicons name="trash-outline" size={20} color="white" />
             </TouchableOpacity>
           </View>
         </>

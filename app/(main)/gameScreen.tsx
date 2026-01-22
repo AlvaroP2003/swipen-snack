@@ -105,8 +105,10 @@ export default function GameScreen() {
         .eq("room_id", roomId)
         .single();
 
-      if (error) return;
-      // console.error("Error fetching participant");
+      if (error) {
+        console.error("Error fetching participant", error.message);
+        return;
+      }
 
       setParticipantId(data.id);
     };
@@ -121,7 +123,6 @@ export default function GameScreen() {
     currentIndex: number;
     animatedValue: SharedValue<number>;
     setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
-    setNewdata: React.Dispatch<React.SetStateAction<MealsData[]>>;
   };
 
   const [newData, setNewData] = useState([...meals, ...meals]);
@@ -132,6 +133,40 @@ export default function GameScreen() {
     setNewData([...meals]); // Update newData whenever meals load
   }, [meals]);
 
+  // Function that writes to supabase
+  const recordSwipe = async (mealId: string, action: "like" | "dislike") => {
+    if (!participantId) return;
+
+    try {
+      const { data, error, status } = await supabase
+        .from("swipes")
+        .insert({
+          participant_id: participantId,
+          meal_id: mealId,
+          action: action,
+        })
+        .select();
+
+      if (error) {
+        console.error("Error inserting swipe:", error);
+        return false;
+      }
+
+      if (!data || data.length === 0) {
+        console.warn(
+          "No rows returned from insert, maybe something went wrong",
+        );
+        return false;
+      }
+
+      console.log(`Swipe recorded successfully:`, data[0]);
+      return true;
+    } catch (err) {
+      console.error("Unexpected error recording swipe:", err);
+      return false;
+    }
+  };
+
   // Card Component
   const Card = ({
     item,
@@ -141,7 +176,6 @@ export default function GameScreen() {
     currentIndex,
     animatedValue,
     setCurrentIndex,
-    setNewData,
   }: Props) => {
     const { width } = useWindowDimensions();
     const translateX = useSharedValue(0);
@@ -165,11 +199,15 @@ export default function GameScreen() {
       .onEnd((e) => {
         if (currentIndex == index) {
           if (Math.abs(e.translationX) > 150 || Math.abs(e.velocityX) > 1000) {
+            const action: "like" | "dislike" =
+              direction.value > 0 ? "like" : "dislike";
+
             translateX.value = withTiming(
               width * 1.2 * direction.value,
               {},
               () => {
                 runOnJS(setCurrentIndex)(currentIndex + 1);
+                runOnJS(recordSwipe)(item.id, action);
               },
             );
             animatedValue.value = withTiming(currentIndex + 1);
@@ -274,6 +312,7 @@ export default function GameScreen() {
               }
               return (
                 <Card
+                  key={item.id}
                   item={item}
                   index={index}
                   datalenght={newData.length}
@@ -281,7 +320,6 @@ export default function GameScreen() {
                   currentIndex={currentIndex}
                   animatedValue={animatedValue}
                   setCurrentIndex={setCurrentIndex}
-                  setNewData={setMeals}
                 />
               );
             })}

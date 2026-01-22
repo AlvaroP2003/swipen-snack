@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -6,6 +7,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -34,115 +36,77 @@ interface Meal {
 interface MatchResult {
   meal: Meal;
   sharedCharacteristics: string[];
-  imageUrl: string | any; // Can be string URL or require() object
+  imageUrl: string | any;
   score: number;
+  matchCount: number;
 }
+
+// Mock restaurant data
+const restaurants: Restaurant[] = [
+  {
+    id: 1,
+    name: "The Italian Corner",
+    address: "123 Main St, Cape Town",
+    distance: "0.5 km",
+    rating: 4.5,
+    image: require("../../assets/images/image-fallback.png"),
+  },
+  {
+    id: 2,
+    name: "Spice Route",
+    address: "456 Long St, Cape Town",
+    distance: "1.2 km",
+    rating: 4.8,
+    image: require("../../assets/images/image-fallback.png"),
+  },
+  {
+    id: 3,
+    name: "Ocean Basket",
+    address: "789 Waterfront, Cape Town",
+    distance: "2.0 km",
+    rating: 4.2,
+    image: require("../../assets/images/image-fallback.png"),
+  },
+  {
+    id: 4,
+    name: "Burger Bliss",
+    address: "321 Kloof St, Cape Town",
+    distance: "0.8 km",
+    rating: 4.6,
+    image: require("../../assets/images/image-fallback.png"),
+  },
+  {
+    id: 5,
+    name: "Sushi Express",
+    address: "654 Sea Point, Cape Town",
+    distance: "1.5 km",
+    rating: 4.7,
+    image: require("../../assets/images/image-fallback.png"),
+  },
+];
 
 export default function ResultScreen() {
   const [modalExpanded, setModalExpanded] = useState(false);
   const [matchResults, setMatchResults] = useState<MatchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { roomId } = useLocalSearchParams();
   const slideAnim = useRef(new Animated.Value(height - 80)).current;
   const flatListRef = useRef<FlatList>(null);
-
-  const restaurants: Restaurant[] = [
-    {
-      id: 1,
-      name: "Mario's Pizzeria",
-      address: "123 Main St",
-      distance: "0.5 km",
-      rating: 4.5,
-      image: require("../../assets/images/image-fallback.png"),
-    },
-    {
-      id: 2,
-      name: "Pasta Palace",
-      address: "456 Oak Ave",
-      distance: "1.2 km",
-      rating: 4.8,
-      image: require("../../assets/images/image-fallback.png"),
-    },
-    {
-      id: 3,
-      name: "Burger Barn",
-      address: "789 Pine Rd",
-      distance: "2.1 km",
-      rating: 4.2,
-      image: require("../../assets/images/image-fallback.png"),
-    },
-  ];
 
   useEffect(() => {
     const fetchSwipes = async () => {
       try {
         setLoading(true);
 
-        // 🧪 MOCK DATA FOR TESTING - Remove this section when ready to use real data
-        const useMockData = true; // Set to false to use real Supabase data
-
-        if (useMockData) {
-          // Simulate loading delay
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-
-          const mockResults: MatchResult[] = [
-            {
-              meal: {
-                id: 1,
-                name: "Margherita Pizza",
-                image: "../../assets/images/image-fallback.png",
-                characteristics: ["Italian", "Cheesy", "Vegetarian", "Classic"],
-              },
-              sharedCharacteristics: ["Italian", "Cheesy", "Vegetarian"],
-              imageUrl: require("../../assets/images/image-fallback.png"),
-              score: 3,
-            },
-            {
-              meal: {
-                id: 2,
-                name: "Chicken Teriyaki Bowl",
-                image: "../../assets/images/image-fallback.png",
-                characteristics: [
-                  "Asian",
-                  "Savory",
-                  "Protein-rich",
-                  "Rice-based",
-                ],
-              },
-              sharedCharacteristics: ["Asian", "Savory"],
-              imageUrl: require("../../assets/images/image-fallback.png"),
-              score: 2,
-            },
-            {
-              meal: {
-                id: 3,
-                name: "Caesar Salad",
-                image: "../../assets/images/image-fallback.png",
-                characteristics: ["Fresh", "Light", "Crispy", "Classic"],
-              },
-              sharedCharacteristics: ["Fresh", "Light"],
-              imageUrl: require("../../assets/images/image-fallback.png"),
-              score: 2,
-            },
-          ];
-
-          setMatchResults(mockResults);
-          setLoading(false);
-          return;
-        }
-        // 🧪 END MOCK DATA
-
         // 1️⃣ Fetch all "like" swipes for the room with their meals
-        const { data, error } = await supabase
+        const { data: swipesData, error: swipesError } = await supabase
           .from("swipes")
           .select(
             `
               id,
               participant_id,
               action,
-              participant:participant_id (
-                room_id
-              ),
+              meal_id,
               meals:meal_id (
                 id,
                 name,
@@ -151,87 +115,171 @@ export default function ResultScreen() {
               )
             `,
           )
-          .eq("action", "like")
-          .eq("participant.room_id", roomId);
+          .eq("action", "like");
 
-        if (error) throw error;
+        if (swipesError) throw swipesError;
 
-        // 2️⃣ Get logged-in user
-        const { data: userData } = await supabase.auth.getUser();
+        // 2️⃣ Get participants in this room
+        const { data: participantsData, error: participantsError } =
+          await supabase
+            .from("participants")
+            .select("id, user_id")
+            .eq("room_id", roomId);
 
-        const user = userData?.user;
+        if (participantsError) throw participantsError;
 
-        if (!user) return;
+        const participantIds = participantsData.map((p) => p.id);
 
-        // 3️⃣ Separate your swipes from participant swipes
-        const myItems = data.filter((item) => item.participant_id === user.id);
-        const participantItems = data.filter(
-          (item) => item.participant_id !== user.id,
+        // 3️⃣ Filter swipes to only include participants from this room
+        const roomSwipes = swipesData.filter((swipe) =>
+          participantIds.includes(swipe.participant_id),
         );
 
-        if (myItems.length === 0 || participantItems.length === 0) {
-          console.log("No match found - insufficient swipes");
+        if (roomSwipes.length === 0) {
+          console.log("No swipes found for this room");
+          setLoading(false);
           return;
         }
 
-        // 4️⃣ Function to compute characteristic overlap
-        const getOverlap = (a: string[], b: string[]) => {
-          if (!a || !b) return [];
-          return a.filter((x) => b.includes(x));
-        };
+        // 4️⃣ Get current user
+        const { data: userData } = await supabase.auth.getUser();
+        const currentUserId = userData?.user?.id;
 
-        // 5️⃣ Collect all matches with scores
-        const allMatches: Map<number, MatchResult> = new Map();
+        if (!currentUserId) {
+          setLoading(false);
+          return;
+        }
 
-        myItems.forEach((my) => {
-          participantItems.forEach((their) => {
-            const shared = getOverlap(
-              my.meals.characteristics || [],
-              their.meals.characteristics || [],
-            );
+        // 5️⃣ Group swipes by meal_id and calculate matches
+        const mealMap = new Map<
+          number,
+          {
+            meal: Meal;
+            likedBy: Set<string>;
+            characteristicsByUser: Map<string, string[]>;
+          }
+        >();
 
-            if (shared.length > 0) {
-              const mealId = my.meals.id;
+        roomSwipes.forEach((swipe) => {
+          if (!swipe.meals) return;
 
-              // If we already have this meal, only update if this has a better score
-              if (
-                !allMatches.has(mealId) ||
-                allMatches.get(mealId)!.score < shared.length
-              ) {
-                const { data: urlData } = supabase.storage
-                  .from("meal_images")
-                  .getPublicUrl(my.meals.image);
+          const mealId = swipe.meal_id;
 
-                allMatches.set(mealId, {
-                  meal: my.meals,
-                  sharedCharacteristics: shared,
-                  imageUrl: urlData?.publicUrl || "",
-                  score: shared.length,
-                });
-              }
-            }
+          if (!mealMap.has(mealId)) {
+            mealMap.set(mealId, {
+              meal: swipe.meals as Meal,
+              likedBy: new Set(),
+              characteristicsByUser: new Map(),
+            });
+          }
+
+          const mealData = mealMap.get(mealId)!;
+          mealData.likedBy.add(swipe.participant_id);
+          mealData.characteristicsByUser.set(
+            swipe.participant_id,
+            swipe.meals.characteristics || [],
+          );
+        });
+
+        // 6️⃣ Calculate matching scores for each meal
+        const matches: MatchResult[] = [];
+
+        mealMap.forEach((mealData, mealId) => {
+          const { meal, likedBy, characteristicsByUser } = mealData;
+
+          // Only consider meals liked by at least 2 people (indicating a match)
+          if (likedBy.size < 2) return;
+
+          // Calculate shared characteristics across all users who liked this meal
+          const allCharacteristics = Array.from(characteristicsByUser.values());
+          const sharedCharacteristics =
+            findCommonCharacteristics(allCharacteristics);
+
+          // Calculate score based on:
+          // 1. Number of shared characteristics (weight: 3)
+          // 2. Number of users who liked it (weight: 2)
+          // 3. Bonus for unanimous likes (weight: 1)
+          const characteristicsScore = sharedCharacteristics.length * 3;
+          const matchCountScore = likedBy.size * 2;
+          const unanimousBonus = likedBy.size === participantIds.length ? 5 : 0;
+
+          const totalScore =
+            characteristicsScore + matchCountScore + unanimousBonus;
+
+          // Get image URL
+          const imageUrl = meal.image
+            ? supabase.storage.from("meal_images").getPublicUrl(meal.image).data
+                .publicUrl
+            : require("../../assets/images/image-fallback.png");
+
+          matches.push({
+            meal,
+            sharedCharacteristics,
+            imageUrl,
+            score: totalScore,
+            matchCount: likedBy.size,
           });
         });
 
-        // 6️⃣ Sort by score and take top 3
-        const sortedMatches = Array.from(allMatches.values())
-          .sort((a, b) => b.score - a.score)
+        // 7️⃣ Sort by score and take top 3
+        const topMatches = matches
+          .sort((a, b) => {
+            // Primary sort by score
+            if (b.score !== a.score) return b.score - a.score;
+            // Secondary sort by number of matches
+            if (b.matchCount !== a.matchCount)
+              return b.matchCount - a.matchCount;
+            // Tertiary sort by number of shared characteristics
+            return (
+              b.sharedCharacteristics.length - a.sharedCharacteristics.length
+            );
+          })
           .slice(0, 3);
 
-        setMatchResults(sortedMatches);
+        setMatchResults(topMatches);
 
-        if (sortedMatches.length === 0) {
-          console.log("No compatible match found");
+        if (topMatches.length === 0) {
+          console.log("No compatible matches found");
         }
       } catch (err: any) {
-        console.error(err.message);
+        console.error("Error fetching matches:", err.message);
       } finally {
         setLoading(false);
       }
     };
 
     fetchSwipes();
-  }, []);
+  }, [roomId]);
+
+  // Helper function to find characteristics common across multiple arrays
+  const findCommonCharacteristics = (
+    characteristicArrays: string[][],
+  ): string[] => {
+    if (characteristicArrays.length === 0) return [];
+    if (characteristicArrays.length === 1) return characteristicArrays[0];
+
+    // Count occurrences of each characteristic
+    const characteristicCounts = new Map<string, number>();
+
+    characteristicArrays.forEach((chars) => {
+      const uniqueChars = new Set(chars);
+      uniqueChars.forEach((char) => {
+        characteristicCounts.set(
+          char,
+          (characteristicCounts.get(char) || 0) + 1,
+        );
+      });
+    });
+
+    // Find characteristics that appear in at least 2 users' lists
+    const minOccurrences = Math.min(2, characteristicArrays.length);
+    const commonChars = Array.from(characteristicCounts.entries())
+      .filter(([_, count]) => count >= minOccurrences)
+      .sort((a, b) => b[1] - a[1]) // Sort by frequency
+      .map(([char, _]) => char);
+
+    return commonChars;
+  };
 
   const toggleModal = () => {
     const toValue = modalExpanded ? height - 80 : height * 0.3;
@@ -250,7 +298,6 @@ export default function ResultScreen() {
     item: MatchResult;
     index: number;
   }) => {
-    // Handle both URI strings and require() objects for images
     const imageSource =
       typeof item.imageUrl === "string"
         ? { uri: item.imageUrl }
@@ -269,8 +316,14 @@ export default function ResultScreen() {
               <Text style={styles.rankText}>#{index + 1}</Text>
             </View>
             <Text style={styles.cardName}>{item.meal.name}</Text>
-            <Text style={styles.characteristicsText}>
-              {item.sharedCharacteristics.join(", ")}
+            {item.sharedCharacteristics.length > 0 && (
+              <Text style={styles.characteristicsText}>
+                {item.sharedCharacteristics.join(", ")}
+              </Text>
+            )}
+            <Text style={styles.matchCountText}>
+              {item.matchCount} {item.matchCount === 1 ? "person" : "people"}{" "}
+              liked this
             </Text>
           </View>
         </View>
@@ -286,46 +339,33 @@ export default function ResultScreen() {
         resizeMode="contain"
       />
 
-      <Text style={styles.title}>
-        {matchResults.length > 0
-          ? "Based on your results, here are your top matches"
-          : "Based on your results, we think you'll like this"}
-      </Text>
+      {!loading && matchResults.length > 0 && (
+        <Text style={styles.title}>
+          Based on your results, here are your top matches
+        </Text>
+      )}
 
       {loading ? (
-        <View style={styles.card}>
+        <View style={styles.centerContainer}>
           <Text style={styles.loadingText}>Finding your matches...</Text>
         </View>
       ) : matchResults.length > 0 ? (
-        <>
-          <FlatList
-            ref={flatListRef}
-            data={matchResults}
-            renderItem={renderCard}
-            keyExtractor={(item) => item.meal.id.toString()}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={width * 0.85}
-            decelerationRate="fast"
-            contentContainerStyle={styles.flatListContent}
-            pagingEnabled={false}
-          />
-          {matchResults.length > 1 && (
-            <View style={styles.dotsContainer}>
-              {matchResults.map((_, index) => (
-                <View
-                  key={index}
-                  style={[styles.dot, index === 0 && styles.dotActive]}
-                />
-              ))}
-            </View>
-          )}
-        </>
+        <FlatList
+          ref={flatListRef}
+          data={matchResults}
+          renderItem={renderCard}
+          keyExtractor={(item) => item.meal.id.toString()}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={width * 0.85}
+          decelerationRate="fast"
+          contentContainerStyle={styles.flatListContent}
+          pagingEnabled={false}
+        />
       ) : (
-        <View style={styles.card}>
-          <View style={styles.noMatchContainer}>
-            <Text style={styles.noMatchText}>No match found</Text>
-          </View>
+        <View style={styles.centerContainer}>
+          <Text style={styles.noMatchText}>No match found</Text>
+          <Text style={styles.noMatchSubtext}>Try swiping on more meals!</Text>
         </View>
       )}
 
@@ -336,47 +376,58 @@ export default function ResultScreen() {
         <Text style={styles.homeButtonText}>Return Home</Text>
       </TouchableOpacity>
 
-      {/* GOOGLE PLACES API WHICH WILL BE IMPLEMENTED LATER */}
-      {/* <Animated.View style={[styles.modal, { top: slideAnim }]}>
-            <TouchableOpacity style={styles.modalHeader} onPress={toggleModal}>
-              <Ionicons name="location" size={20} color="#ff0a54" />
-              <Text style={styles.modalTitle}>Places near me</Text>
-              <Ionicons 
-                name={modalExpanded ? "chevron-down" : "chevron-up"} 
-                size={20} 
-                color="#ff0a54" 
-              />
-            </TouchableOpacity>
-            
-            {modalExpanded && (
-              <ScrollView style={styles.modalContent}>
-                {restaurants.map((restaurant) => (
-                  <View key={restaurant.id} style={styles.restaurantItem}>
-                    <Image source={restaurant.image} style={styles.restaurantImage} />
-                    <View style={styles.restaurantInfo}>
-                      <Text style={styles.restaurantName}>{restaurant.name}</Text>
-                      <View style={styles.addressRow}>
-                        <Text style={styles.restaurantAddress}>{restaurant.address}</Text>
-                        <Text style={styles.dot}> • </Text>
-                        <Text style={styles.restaurantDistance}>{restaurant.distance}</Text>
-                      </View>
-                      <View style={styles.ratingRow}>
-                        {[...Array(5)].map((_, i) => (
-                          <Ionicons
-                            key={i}
-                            name={i < Math.floor(restaurant.rating) ? "star" : "star-outline"}
-                            size={14}
-                            color="#ff0a54"
-                          />
-                        ))}
-                        <Text style={styles.ratingText}>{restaurant.rating}</Text>
-                      </View>
-                    </View>
+      {/* Places Near Me Modal */}
+      <Animated.View style={[styles.modal, { top: slideAnim }]}>
+        <TouchableOpacity style={styles.modalHeader} onPress={toggleModal}>
+          <Ionicons name="location" size={20} color="#ff0a54" />
+          <Text style={styles.modalTitle}>Places near me</Text>
+          <Ionicons
+            name={modalExpanded ? "chevron-down" : "chevron-up"}
+            size={20}
+            color="#ff0a54"
+          />
+        </TouchableOpacity>
+
+        {modalExpanded && (
+          <ScrollView style={styles.modalContent}>
+            {restaurants.map((restaurant) => (
+              <View key={restaurant.id} style={styles.restaurantItem}>
+                <Image
+                  source={restaurant.image}
+                  style={styles.restaurantImage}
+                />
+                <View style={styles.restaurantInfo}>
+                  <Text style={styles.restaurantName}>{restaurant.name}</Text>
+                  <View style={styles.addressRow}>
+                    <Text style={styles.restaurantAddress}>
+                      {restaurant.address}
+                    </Text>
+                    <Text style={styles.dot}> • </Text>
+                    <Text style={styles.restaurantDistance}>
+                      {restaurant.distance}
+                    </Text>
                   </View>
-                ))}
-              </ScrollView>
-            )}
-          </Animated.View> */}
+                  <View style={styles.ratingRow}>
+                    {[...Array(5)].map((_, i) => (
+                      <Ionicons
+                        key={i}
+                        name={
+                          i < Math.floor(restaurant.rating)
+                            ? "star"
+                            : "star-outline"
+                        }
+                        size={14}
+                        color="#ff0a54"
+                      />
+                    ))}
+                    <Text style={styles.ratingText}>{restaurant.rating}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -388,9 +439,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#ff0a54",
   },
   image: {
-    marginTop: 30,
-    width: 300,
-    height: 100,
+    marginTop: 10,
+    width: 380,
+    height: height * 0.1,
+    alignSelf: "center",
   },
   title: {
     fontSize: 20,
@@ -401,8 +453,14 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     paddingHorizontal: 20,
   },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   flatListContent: {
     paddingHorizontal: width * 0.075,
+    paddingTop: 30,
   },
   cardContainer: {
     width: width * 0.85,
@@ -418,15 +476,6 @@ const styles = StyleSheet.create({
   cardImage: {
     width: "100%",
     height: "100%",
-  },
-  nameOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    paddingVertical: 10,
-    paddingHorizontal: 15,
   },
   nameContainer: {
     backgroundColor: "white",
@@ -466,42 +515,27 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     fontStyle: "italic",
+    marginBottom: 5,
   },
-  dotsContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 15,
-    marginBottom: 20,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-    marginHorizontal: 4,
-  },
-  dotActive: {
-    backgroundColor: "white",
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  matchCountText: {
+    fontSize: 12,
+    color: "#999",
+    textAlign: "center",
   },
   loadingText: {
     fontSize: 18,
-    color: "#ff0a54",
-    textAlign: "center",
-    marginTop: 180,
-  },
-  noMatchContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    color: "white",
+    fontWeight: "500",
   },
   noMatchText: {
     fontSize: 20,
-    color: "#ff0a54",
+    color: "white",
     fontWeight: "bold",
+    marginBottom: 10,
+  },
+  noMatchSubtext: {
+    fontSize: 14,
+    color: "white",
   },
   homeButton: {
     backgroundColor: "transparent",
@@ -510,7 +544,8 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     borderWidth: 2,
     borderColor: "#fff",
-    marginTop: 10,
+    marginTop: 20,
+    marginBottom: 20,
   },
   homeButtonText: {
     color: "#fff",
@@ -582,6 +617,10 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   restaurantAddress: {
+    fontSize: 12,
+    color: "#666",
+  },
+  dot: {
     fontSize: 12,
     color: "#666",
   },

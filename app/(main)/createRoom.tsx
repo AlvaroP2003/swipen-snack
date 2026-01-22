@@ -17,6 +17,7 @@ export default function JoinRoomScreen() {
   const [modalMessage, setModalMessage] = useState("");
 
   const roomIdRef = useRef("");
+  const navigatedRef = useRef(false);
 
   // Generate random code
   const generateCode = async () => {
@@ -96,8 +97,7 @@ export default function JoinRoomScreen() {
 
     // Delete room when component is unmounted
     return () => {
-      if (roomIdRef.current) deleteRoom(roomIdRef.current);
-      console.log("Unmounted, deleted room");
+      if (roomIdRef.current && !navigatedRef) deleteRoom(roomIdRef.current);
     };
   }, []);
 
@@ -129,6 +129,7 @@ export default function JoinRoomScreen() {
             .eq("room_id", roomId);
 
           if (data?.length === 2) {
+            navigatedRef.current = true;
             router.replace({
               pathname: "/(main)/gameScreen",
               params: { roomId: roomId },
