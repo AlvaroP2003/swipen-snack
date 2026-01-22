@@ -10,35 +10,39 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
+  interpolate,
+  SharedValue,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from "react-native-reanimated";
+
 import { SafeAreaView } from "react-native-safe-area-context";
+import { runOnJS } from "react-native-worklets";
+
+type MealsData = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  preferences: string[];
+  characteristics: string[];
+};
 
 const { width, height } = Dimensions.get("window");
-const SWIPE_THRESHOLD = width * 0.25;
-const OFFSCREEN = width * 1.5;
 
 export default function GameScreen() {
   const router = useRouter();
   const { roomId } = useLocalSearchParams();
-  const [meals, setMeals] = useState<any[]>([]);
+  const [meals, setMeals] = useState<MealsData[]>([]);
   const [loading, setLoading] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [index, setIndex] = useState(0);
   const [participantId, setParticipantId] = useState<string | null>(null);
-
-  // Animated values for current card only
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const nextCardScale = useSharedValue(0.95);
-  const nextCardTranslateY = useSharedValue(10);
 
   // Fetch meals
   useEffect(() => {
@@ -101,106 +105,152 @@ export default function GameScreen() {
         .eq("room_id", roomId)
         .single();
 
-      if (error) return console.error("Error fetching participant");
+      if (error) return;
+      // console.error("Error fetching participant");
 
       setParticipantId(data.id);
     };
     fetchParticipant();
   }, [roomId]);
 
-  // Swipe logic
-  const swipe = (direction: "left" | "right") => {
-    if (!currentMeal) return;
-    recordSwipe(currentMeal, direction === "left" ? "disliked" : "like");
-
-    setIndex((prev) => prev + 1);
-
-    if (index >= meals.length - 1) {
-      runOnJS(onSwipedAll)();
-    }
+  type Props = {
+    item: MealsData;
+    index: number;
+    datalenght: number;
+    maxVisibleItem: number;
+    currentIndex: number;
+    animatedValue: SharedValue<number>;
+    setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
+    setNewdata: React.Dispatch<React.SetStateAction<MealsData[]>>;
   };
 
-  const recordSwipe = async (meal: any, action: "like" | "disliked") => {
-    if (!meal || !participantId) return;
-    try {
-      await supabase
-        .from("swipes")
-        .insert({ participant_id: participantId, meal_id: meal.id, action });
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const [newData, setNewData] = useState([...meals, ...meals]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const animatedValue = useSharedValue(0);
 
-  // Pan gesture
-  const panGesture = Gesture.Pan()
-    .onUpdate((e) => {
-      translateX.value = e.translationX;
-      translateY.value = e.translationY;
+  useEffect(() => {
+    setNewData([...meals]); // Update newData whenever meals load
+  }, [meals]);
 
-      const progress = Math.min(
-        Math.abs(translateX.value) / SWIPE_THRESHOLD,
-        1,
+  // Card Component
+  const Card = ({
+    item,
+    index,
+    datalenght,
+    maxVisibleItem,
+    currentIndex,
+    animatedValue,
+    setCurrentIndex,
+    setNewData,
+  }: Props) => {
+    const { width } = useWindowDimensions();
+    const translateX = useSharedValue(0);
+    const direction = useSharedValue(0);
+
+    const pan = Gesture.Pan()
+      .onUpdate((e) => {
+        const isSwipeRight = e.translationX > 0;
+
+        direction.value = isSwipeRight ? 1 : -1;
+
+        if (currentIndex === index) {
+          translateX.value = e.translationX;
+          animatedValue.value = interpolate(
+            Math.abs(e.translationX),
+            [0, width],
+            [index, index + 1],
+          );
+        }
+      })
+      .onEnd((e) => {
+        if (currentIndex == index) {
+          if (Math.abs(e.translationX) > 150 || Math.abs(e.velocityX) > 1000) {
+            translateX.value = withTiming(
+              width * 1.2 * direction.value,
+              {},
+              () => {
+                runOnJS(setCurrentIndex)(currentIndex + 1);
+              },
+            );
+            animatedValue.value = withTiming(currentIndex + 1);
+          } else {
+            translateX.value = withTiming(0, { duration: 300 });
+            animatedValue.value = withTiming(currentIndex);
+          }
+        }
+      });
+
+    const animatedStyle = useAnimatedStyle(() => {
+      const currentItem = index === currentIndex;
+
+      const rotateZ = interpolate(
+        Math.abs(translateX.value),
+        [0, width],
+        [0, 20],
       );
-      nextCardScale.value = 0.95 + 0.05 * progress;
-      nextCardTranslateY.value = 10 - 10 * progress;
-    })
-    .onEnd(() => {
-      if (translateX.value > SWIPE_THRESHOLD) {
-        translateX.value = withSpring(OFFSCREEN, {}, () => {
-          runOnJS(swipe)("right");
-          translateX.value = 0;
-          translateY.value = 0;
-          nextCardScale.value = 0.95;
-          nextCardTranslateY.value = 10;
-        });
-      } else if (translateX.value < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(-OFFSCREEN, {}, () => {
-          runOnJS(swipe)("left");
-          translateX.value = 0;
-          translateY.value = 0;
-          nextCardScale.value = 0.95;
-          nextCardTranslateY.value = 10;
-        });
-      } else {
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
-        nextCardScale.value = withSpring(0.95);
-        nextCardTranslateY.value = withSpring(10);
-      }
+
+      const translateY = interpolate(
+        animatedValue.value,
+        [index - 1, index],
+        [-30, 0],
+      );
+
+      const scale = interpolate(
+        animatedValue.value,
+        [index - 1, index],
+        [0.9, 1],
+      );
+
+      const opacity = interpolate(
+        animatedValue.value + maxVisibleItem,
+        [index, index + 1],
+        [0, 1],
+      );
+
+      return {
+        transform: [
+          { translateX: translateX.value },
+          {
+            scale: currentItem ? 1 : scale,
+          },
+          {
+            translateY: currentItem ? 0 : translateY,
+          },
+          {
+            rotateZ: currentItem ? `${direction.value * rotateZ}deg` : "0deg",
+          },
+        ],
+        opacity: index < maxVisibleItem + currentIndex ? 1 : opacity,
+      };
     });
 
-  // Animated styles
-  const topCardStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { rotate: `${translateX.value / 15}deg` },
-    ],
-  }));
+    return (
+      <GestureDetector gesture={pan}>
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              zIndex: datalenght - index,
+            },
+            animatedStyle,
+          ]}
+        >
+          {/* Background Image */}
+          <Image
+            source={{ uri: item.imageUrl }} // URL from Supabase
+            style={styles.cardImage}
+          />
 
-  const nextCardStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: nextCardScale.value },
-      { translateY: nextCardTranslateY.value },
-    ],
-    opacity: 0.9,
-  }));
-
-  const onSwipedAll = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    await supabase
-      .from("participants")
-      .update({ status: "waiting" })
-      .eq("user_id", user.id);
-
-    router.replace({ pathname: "/waitingScreen", params: { roomId } });
+          {/* Overlay Text */}
+          <View style={styles.cardTextContainer}>
+            <Text style={styles.cardText}>{item.name}</Text>
+          </View>
+        </Animated.View>
+      </GestureDetector>
+    );
   };
 
-  const currentMeal = meals[index];
+  // --- --- ---
 
   return (
     <SafeAreaView style={styles.container}>
@@ -218,52 +268,29 @@ export default function GameScreen() {
       ) : (
         <>
           <View style={styles.gameContainer}>
-            {meals
-              .slice(index, index + 2)
-              .reverse() // so top card renders on top
-              .map((meal, i) => {
-                const isTop = i === 1; // after reverse(), last item is top
-
-                // Only apply animated style to the top card
-                // Next card gets static initial positioning
-                const animStyle = isTop ? topCardStyle : nextCardStyle;
-
-                const CardContent = (
-                  <Animated.View
-                    key={`${meal.id}-${index}`}
-                    style={[
-                      styles.card,
-                      isTop ? styles.cardTop : styles.cardBehind,
-                      animStyle,
-                    ]}
-                  >
-                    <Image
-                      source={{ uri: meal.imageUrl }}
-                      style={styles.cardImage}
-                    />
-                    <View style={styles.nameContainer}>
-                      <Text style={styles.name}>{meal.name}</Text>
-                    </View>
-                  </Animated.View>
-                );
-
-                return isTop ? (
-                  <GestureDetector
-                    key={`${meal.id}-${index}`}
-                    gesture={panGesture}
-                  >
-                    {CardContent}
-                  </GestureDetector>
-                ) : (
-                  CardContent
-                );
-              })}
+            {newData?.map((item, index) => {
+              if (index > currentIndex + 3 || index < currentIndex) {
+                return null;
+              }
+              return (
+                <Card
+                  item={item}
+                  index={index}
+                  datalenght={newData.length}
+                  maxVisibleItem={3}
+                  currentIndex={currentIndex}
+                  animatedValue={animatedValue}
+                  setCurrentIndex={setCurrentIndex}
+                  setNewData={setMeals}
+                />
+              );
+            })}
           </View>
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={styles.iconContainer}
-              onPress={() => swipe("left")}
+              disabled={index >= meals.length}
             >
               <Ionicons name="close" size={40} color="#ff0a54" />
             </TouchableOpacity>
@@ -277,7 +304,7 @@ export default function GameScreen() {
 
             <TouchableOpacity
               style={styles.iconContainer}
-              onPress={() => swipe("right")}
+              disabled={index >= meals.length}
             >
               <Ionicons name="heart" size={40} color="#ff0a54" />
             </TouchableOpacity>
@@ -310,35 +337,42 @@ const styles = StyleSheet.create({
     height: height * 0.1,
     alignSelf: "center",
   },
-  gameContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  card: {
-    height: "90%",
-    width: width * 0.9,
-    borderRadius: 20,
-    backgroundColor: "#fff",
-  },
-  cardImage: { width: "100%", height: "100%", borderRadius: 20 },
-  cardBehind: { zIndex: 1, position: "absolute", top: 0, bottom: 0 },
-  cardTop: { zIndex: 2, position: "absolute", top: 0, bottom: 0 },
-  nameContainer: {
-    backgroundColor: "white",
-    height: "10%",
+  gameContainer: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 10,
-    marginHorizontal: 15,
-    marginBottom: 15,
+  },
+  card: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: width * 0.9,
+    height: height * 0.7,
+    borderRadius: 28,
+    overflow: "hidden", // important so image doesn't spill
+    backgroundColor: "gray", // fallback color
   },
-  name: {
-    fontSize: 25,
+
+  cardImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+
+  cardTextContainer: {
+    position: "absolute",
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: "rgba(0,0,0,0.4)", // optional dark overlay
+    padding: 10,
+    borderRadius: 12,
+  },
+
+  cardText: {
+    color: "white",
+    fontSize: 24,
     fontWeight: "bold",
-    color: "#ff0a54",
-    textAlign: "center",
   },
+
   loadingText: {
     fontSize: 18,
     color: "white",
