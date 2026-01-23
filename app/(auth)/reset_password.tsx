@@ -1,25 +1,23 @@
 import ResponseModal from "@/components/ResponseModal";
 import { supabase } from "@/lib/supabase";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState("");
+export default function ResetPasswordScreen() {
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const router = useRouter();
 
   // Response Modal state
@@ -42,10 +40,28 @@ export default function LoginScreen() {
     setModalVisible(true);
   };
 
-  async function signInWithEmail() {
+  async function handleResetPassword() {
+    if (!password || !confirmPassword) {
+      showResponseModal("Error", "Please fill in all fields", "error");
+      return;
+    }
+
+    if (password.length < 6) {
+      showResponseModal(
+        "Error",
+        "Password must be at least 6 characters long",
+        "error",
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showResponseModal("Error", "Passwords do not match", "error");
+      return;
+    }
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email,
+    const { error } = await supabase.auth.updateUser({
       password: password,
     });
 
@@ -54,6 +70,18 @@ export default function LoginScreen() {
       setLoading(false);
       return;
     }
+
+    showResponseModal(
+      "Success",
+      "Your password has been reset successfully",
+      "success",
+    );
+    setLoading(false);
+
+    // Navigate to login after successful reset
+    setTimeout(() => {
+      router.replace("/login");
+    }, 2000);
   }
 
   return (
@@ -63,76 +91,58 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.formCard}>
-          <Text style={styles.welcomeText}>Welcome Back!</Text>
-          <Text style={styles.subText}>Sign in to continue</Text>
+          <Text style={styles.welcomeText}>Reset Password</Text>
+          <Text style={styles.subText}>
+            Please enter your new password below
+          </Text>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Email</Text>
+            <Text style={styles.inputLabel}>New Password</Text>
             <TextInput
-              style={[styles.input, emailFocused && styles.inputFocused]}
-              onChangeText={(text) => setEmail(text)}
-              value={email}
-              placeholder="Enter your email"
+              style={[styles.input, passwordFocused && styles.inputFocused]}
+              onChangeText={(text) => setPassword(text)}
+              value={password}
+              placeholder="Enter new password"
               autoCapitalize="none"
               placeholderTextColor="#999"
-              onFocus={() => setEmailFocused(true)}
-              onBlur={() => setEmailFocused(false)}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+              secureTextEntry
             />
           </View>
 
           <View style={styles.inputContainer}>
-            <View style={styles.passwordLabelContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <TouchableOpacity
-                onPress={() => router.push("/(auth)/forgot_password")}
-              >
-                <Text style={styles.forgotPasswordLink}>Forgot Password?</Text>
-              </TouchableOpacity>
-            </View>
-            <View
+            <Text style={styles.inputLabel}>Confirm Password</Text>
+            <TextInput
               style={[
-                styles.passwordContainer,
-                passwordFocused && styles.inputFocused,
+                styles.input,
+                confirmPasswordFocused && styles.inputFocused,
               ]}
-            >
-              <TextInput
-                style={styles.passwordInput}
-                onChangeText={(text) => setPassword(text)}
-                value={password}
-                secureTextEntry={!showPassword}
-                placeholder="Enter your password"
-                autoCapitalize="none"
-                placeholderTextColor="#999"
-                onFocus={() => setPasswordFocused(true)}
-                onBlur={() => setPasswordFocused(false)}
-              />
-              <TouchableOpacity
-                style={styles.eyeIcon}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Ionicons
-                  name={showPassword ? "eye-off" : "eye"}
-                  size={24}
-                  color="#666"
-                />
-              </TouchableOpacity>
-            </View>
+              onChangeText={(text) => setConfirmPassword(text)}
+              value={confirmPassword}
+              placeholder="Confirm new password"
+              autoCapitalize="none"
+              placeholderTextColor="#999"
+              onFocus={() => setConfirmPasswordFocused(true)}
+              onBlur={() => setConfirmPasswordFocused(false)}
+              secureTextEntry
+            />
           </View>
 
           <TouchableOpacity
-            style={[styles.loginButton, loading && styles.buttonDisabled]}
+            style={[styles.resetButton, loading && styles.buttonDisabled]}
             disabled={loading}
-            onPress={signInWithEmail}
+            onPress={handleResetPassword}
           >
-            <Text style={styles.loginButtonText}>
-              {loading ? "Logging in..." : "Login"}
+            <Text style={styles.resetButtonText}>
+              {loading ? "Resetting..." : "Reset Password"}
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.replace("/(auth)/sign_up")}>
-              <Text style={styles.signUpLink}>Sign Up</Text>
+          <View style={styles.loginContainer}>
+            <Text style={styles.loginText}>Remember your password? </Text>
+            <TouchableOpacity onPress={() => router.push("/login")}>
+              <Text style={styles.loginLink}>Login</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -185,6 +195,7 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     marginBottom: 40,
+    paddingHorizontal: 10,
   },
   inputContainer: {
     marginBottom: 20,
@@ -194,17 +205,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#333",
     marginBottom: 8,
-  },
-  passwordLabelContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  forgotPasswordLink: {
-    fontSize: 14,
-    color: "#999",
-    fontWeight: "600",
-    textDecorationLine: "underline",
   },
   input: {
     borderWidth: 1,
@@ -220,27 +220,7 @@ const styles = StyleSheet.create({
     borderColor: "#ff0a54",
     borderWidth: 2,
   },
-  passwordContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 12,
-    backgroundColor: "#f9f9f9",
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    backgroundColor: "transparent",
-    color: "#171717",
-  },
-  eyeIcon: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  loginButton: {
+  resetButton: {
     backgroundColor: "#ff0a54",
     borderRadius: 25,
     paddingVertical: 16,
@@ -256,7 +236,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  loginButtonText: {
+  resetButtonText: {
     color: "white",
     fontSize: 18,
     fontWeight: "bold",
@@ -264,16 +244,16 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-  signUpContainer: {
+  loginContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
-  signUpText: {
+  loginText: {
     fontSize: 16,
     color: "#666",
   },
-  signUpLink: {
+  loginLink: {
     fontSize: 16,
     color: "#ff0a54",
     fontWeight: "bold",

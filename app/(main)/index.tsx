@@ -27,7 +27,7 @@ export default function Homescreen() {
 
       <TouchableOpacity
         style={styles.createContainer}
-        onPress={() => router.push("/(main)/resultScreen")}
+        onPress={() => router.push("/(main)/createRoom")}
       >
         <Text style={styles.createText}>CREATE ROOM</Text>
       </TouchableOpacity>

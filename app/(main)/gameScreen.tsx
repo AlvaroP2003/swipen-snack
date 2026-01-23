@@ -1,6 +1,5 @@
 import ConfirmModal from "@/components/ConfirmModal";
 import { supabase } from "@/lib/supabase";
-import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -9,7 +8,6 @@ import {
   Image,
   StyleSheet,
   Text,
-  TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -115,6 +113,28 @@ export default function GameScreen() {
     fetchParticipant();
   }, [roomId]);
 
+  // Hearbeat check to make sure user is active
+  useEffect(() => {
+    const setHearbeat = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const interval = setInterval(() => {
+        supabase
+          .from("room_participants")
+          .update({ last_active_at: new Date().toISOString() })
+          .eq("room_id", roomId)
+          .eq("user_id", user?.id);
+      }, 15000);
+
+      return () => clearInterval(interval);
+    };
+
+    setHearbeat();
+  }, []);
+
   type Props = {
     item: MealsData;
     index: number;
@@ -130,7 +150,7 @@ export default function GameScreen() {
   const animatedValue = useSharedValue(0);
 
   useEffect(() => {
-    setNewData([...meals]); // Update newData whenever meals load
+    setNewData([...meals]);
   }, [meals]);
 
   // Function that writes to supabase
@@ -325,7 +345,8 @@ export default function GameScreen() {
             })}
           </View>
 
-          <View style={styles.buttonContainer}>
+          {/* Buttons which will be implemented later */}
+          {/* <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={styles.iconContainer}
               disabled={index >= meals.length}
@@ -335,18 +356,11 @@ export default function GameScreen() {
 
             <TouchableOpacity
               style={styles.iconContainer}
-              onPress={() => setShowExitModal(true)}
-            >
-              <Ionicons name="ban" size={40} color="#ff0a54" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.iconContainer}
               disabled={index >= meals.length}
             >
               <Ionicons name="heart" size={40} color="#ff0a54" />
             </TouchableOpacity>
-          </View>
+          </View> */}
         </>
       )}
 
@@ -400,13 +414,14 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 20,
     right: 20,
-    backgroundColor: "rgba(0,0,0,0.4)", // optional dark overlay
+    backgroundColor: "white",
     padding: 10,
     borderRadius: 12,
   },
 
   cardText: {
-    color: "white",
+    textAlign: "center",
+    color: "#ff0a54",
     fontSize: 24,
     fontWeight: "bold",
   },

@@ -544,7 +544,6 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     borderWidth: 2,
     borderColor: "#fff",
-    marginTop: 20,
     marginBottom: 20,
   },
   homeButtonText: {
@@ -557,7 +556,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: height * 0.9,
+    height: height * 0.8,
     backgroundColor: "white",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
