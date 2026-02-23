@@ -1,14 +1,15 @@
 import ResponseModal from "@/components/ResponseModal";
+import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -19,6 +20,8 @@ export default function ResetPasswordScreen() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const router = useRouter();
+
+  const { setIsRecovering } = useAuth();
 
   // Response Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -66,6 +69,7 @@ export default function ResetPasswordScreen() {
     });
 
     if (error) {
+      console.log("Update user fialed");
       showResponseModal("Error", error.message, "error");
       setLoading(false);
       return;
@@ -76,11 +80,13 @@ export default function ResetPasswordScreen() {
       "Your password has been reset successfully",
       "success",
     );
+
     setLoading(false);
 
     // Navigate to login after successful reset
     setTimeout(() => {
-      router.replace("/login");
+      setIsRecovering(false);
+      router.replace("/(auth)");
     }, 2000);
   }
 
@@ -141,7 +147,7 @@ export default function ResetPasswordScreen() {
 
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>Remember your password? </Text>
-            <TouchableOpacity onPress={() => router.push("/login")}>
+            <TouchableOpacity onPress={() => router.push("/(auth)")}>
               <Text style={styles.loginLink}>Login</Text>
             </TouchableOpacity>
           </View>

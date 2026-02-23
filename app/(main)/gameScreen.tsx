@@ -1,5 +1,6 @@
 import ConfirmModal from "@/components/ConfirmModal";
 import { supabase } from "@/lib/supabase";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -8,18 +9,19 @@ import {
   Image,
   StyleSheet,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   interpolate,
+  interpolateColor,
   SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { runOnJS } from "react-native-worklets";
 
@@ -113,9 +115,9 @@ export default function GameScreen() {
     fetchParticipant();
   }, [roomId]);
 
-  // Hearbeat check to make sure user is active
+  // Heartbeat check to make sure user is active
   useEffect(() => {
-    const setHearbeat = async () => {
+    const setHeartbeat = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -132,7 +134,7 @@ export default function GameScreen() {
       return () => clearInterval(interval);
     };
 
-    setHearbeat();
+    setHeartbeat();
   }, []);
 
   type Props = {
@@ -145,7 +147,7 @@ export default function GameScreen() {
     setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
   };
 
-  const [newData, setNewData] = useState([...meals, ...meals]);
+  const [newData, setNewData] = useState([...meals]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const animatedValue = useSharedValue(0);
 
@@ -158,7 +160,7 @@ export default function GameScreen() {
     if (!participantId) return;
 
     try {
-      const { data, error, status } = await supabase
+      const { data, error } = await supabase
         .from("swipes")
         .insert({
           participant_id: participantId,
@@ -204,7 +206,6 @@ export default function GameScreen() {
     const pan = Gesture.Pan()
       .onUpdate((e) => {
         const isSwipeRight = e.translationX > 0;
-
         direction.value = isSwipeRight ? 1 : -1;
 
         if (currentIndex === index) {
@@ -268,38 +269,49 @@ export default function GameScreen() {
       return {
         transform: [
           { translateX: translateX.value },
-          {
-            scale: currentItem ? 1 : scale,
-          },
-          {
-            translateY: currentItem ? 0 : translateY,
-          },
-          {
-            rotateZ: currentItem ? `${direction.value * rotateZ}deg` : "0deg",
-          },
+          { scale: currentItem ? 1 : scale },
+          { translateY: currentItem ? 0 : translateY },
+          { rotateZ: currentItem ? `${direction.value * rotateZ}deg` : "0deg" },
         ],
         opacity: index < maxVisibleItem + currentIndex ? 1 : opacity,
+      };
+    });
+
+    // Gradient overlay: red on left swipe, green on right swipe
+    const overlayStyle = useAnimatedStyle(() => {
+      const isCurrentCard = index === currentIndex;
+
+      // Opacity ramps up from 0 → 0.5 as card moves 0 → 150px (the threshold)
+      const overlayOpacity = interpolate(
+        Math.abs(translateX.value),
+        [0, 150],
+        [0, 0.45],
+        "clamp",
+      );
+
+      // Color: red for left (negative), green for right (positive)
+      const backgroundColor = interpolateColor(
+        translateX.value,
+        [-150, 0, 150],
+        ["rgba(255, 10, 84, 1)", "rgba(0,0,0,0)", "rgba(39, 199, 111, 1)"],
+      );
+
+      return {
+        opacity: isCurrentCard ? overlayOpacity : 0,
+        backgroundColor,
       };
     });
 
     return (
       <GestureDetector gesture={pan}>
         <Animated.View
-          style={[
-            styles.card,
-            {
-              zIndex: datalenght - index,
-            },
-            animatedStyle,
-          ]}
+          style={[styles.card, { zIndex: datalenght - index }, animatedStyle]}
         >
-          {/* Background Image */}
-          <Image
-            source={{ uri: item.imageUrl }} // URL from Supabase
-            style={styles.cardImage}
-          />
+          <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
 
-          {/* Overlay Text */}
+          {/* Swipe direction color overlay */}
+          <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]} />
+
           <View style={styles.cardTextContainer}>
             <Text style={styles.cardText}>{item.name}</Text>
           </View>
@@ -308,16 +320,8 @@ export default function GameScreen() {
     );
   };
 
-  // --- --- ---
-
   return (
     <SafeAreaView style={styles.container}>
-      <Image
-        style={styles.image}
-        source={require("../../assets/images/banner-icon.png")}
-        resizeMode="contain"
-      />
-
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#ffffff" />
@@ -325,6 +329,17 @@ export default function GameScreen() {
         </View>
       ) : (
         <>
+          {/* Header with Quit Button */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.quitButton}
+              onPress={() => setShowExitModal(true)}
+            >
+              <Ionicons name="exit-outline" size={22} color="#ff0a54" />
+              <Text style={styles.quitButtonText}>Quit Room</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.gameContainer}>
             {newData?.map((item, index) => {
               if (index > currentIndex + 3 || index < currentIndex) {
@@ -345,8 +360,7 @@ export default function GameScreen() {
             })}
           </View>
 
-          {/* Buttons which will be implemented later */}
-          {/* <View style={styles.buttonContainer}>
+          <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={styles.iconContainer}
               disabled={index >= meals.length}
@@ -360,7 +374,7 @@ export default function GameScreen() {
             >
               <Ionicons name="heart" size={40} color="#ff0a54" />
             </TouchableOpacity>
-          </View> */}
+          </View>
         </>
       )}
 
@@ -381,13 +395,39 @@ export default function GameScreen() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  container: { flex: 1, backgroundColor: "#ff0a54" },
-  image: {
+  container: {
+    flex: 1,
+    backgroundColor: "#ff0a54",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: 18,
+    color: "white",
+    textAlign: "center",
     marginTop: 10,
-    width: 380,
-    height: height * 0.1,
-    alignSelf: "center",
+  },
+  header: {
+    alignItems: "center",
+    justifyContent: "flex-end",
+    height: height * 0.07,
+  },
+  quitButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    gap: 6,
+  },
+  quitButtonText: {
+    color: "#ff0a54",
+    fontSize: 15,
+    fontWeight: "600",
   },
   gameContainer: {
     flex: 1,
@@ -397,18 +437,16 @@ const styles = StyleSheet.create({
   card: {
     position: "absolute",
     width: width * 0.9,
-    height: height * 0.7,
+    height: height * 0.75,
     borderRadius: 28,
-    overflow: "hidden", // important so image doesn't spill
-    backgroundColor: "gray", // fallback color
+    overflow: "hidden",
+    backgroundColor: "gray",
   },
-
   cardImage: {
     width: "100%",
     height: "100%",
     resizeMode: "cover",
   },
-
   cardTextContainer: {
     position: "absolute",
     bottom: 20,
@@ -418,19 +456,11 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 12,
   },
-
   cardText: {
     textAlign: "center",
     color: "#ff0a54",
     fontSize: 24,
     fontWeight: "bold",
-  },
-
-  loadingText: {
-    fontSize: 18,
-    color: "white",
-    textAlign: "center",
-    marginTop: 10,
   },
   buttonContainer: {
     flexDirection: "row",
@@ -441,8 +471,8 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     backgroundColor: "white",
-    height: 60,
-    width: 60,
+    height: height * 0.07,
+    width: height * 0.07,
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 30,

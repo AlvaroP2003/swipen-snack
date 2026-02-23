@@ -1,36 +1,35 @@
-import { usePasswordRecovery } from "@/hooks/use-password-recovery";
+import { AuthContext } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { createSessionFromUrl } from "@/utils/use-password-recovery";
 import type { Session } from "@supabase/supabase-js";
-import * as NavigationBar from "expo-navigation-bar";
+import * as Linking from "expo-linking";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatusBar, StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecovering, setIsRecovering] = useState(false);
+  const handleUrlRef = useRef(false);
 
   const router = useRouter();
   const segments = useSegments();
 
-  // Call the hook to set session from url
-  usePasswordRecovery();
-
+  // Use Effect to get initial session
   useEffect(() => {
-    NavigationBar.setBackgroundColorAsync("#ff0a54");
-    NavigationBar.setButtonStyleAsync("light");
-  }, []);
-  useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
-    // Subscribe to auth changes
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+
+      if (_event === "PASSWORD_RECOVERY") {
+        setIsRecovering(true);
+      }
     });
 
     return () => {
@@ -38,21 +37,49 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Hook to get url and tokens from link path and create a session (via emails)
+  useEffect(() => {
+    const handleUrl = async (url: string) => {
+      if (handleUrlRef.current) return; // Prevents it from firing twice
+      handleUrlRef.current = true;
+
+      const result = await createSessionFromUrl(url);
+      if (!result) return;
+
+      if (result.type === "recovery") {
+        setIsRecovering(true);
+        setTimeout(() => {
+          router.replace("/(auth)/reset_password");
+        }, 0);
+      }
+    };
+
+    // Get url from cold boot up
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    });
+
+    // Get url from open link
+    const sub = Linking.addEventListener("url", (e) => handleUrl(e.url));
+
+    return () => sub.remove();
+  }, []);
+
+  // Auth guard to redirect unauthorized users
   useEffect(() => {
     if (loading) return;
 
     const inMainRoute = segments[0] === "(main)";
     const inAuthRoute = segments[0] === "(auth)";
-    const isRecoveryRoute = segments.join("/").includes("update_password");
 
-    if (!session && !inAuthRoute && !isRecoveryRoute) {
+    if (!session && !inAuthRoute && !isRecovering) {
       router.replace("/(auth)");
     }
 
-    if (session && !inMainRoute) {
+    if (session && !inMainRoute && !isRecovering) {
       router.replace("/(main)");
     }
-  }, [loading, session, segments]);
+  }, [loading, session, segments, isRecovering]);
 
   if (loading) {
     return (
@@ -71,10 +98,17 @@ export default function RootLayout() {
         barStyle={"light-content"}
         hidden={false}
       />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(main)" />
-        <Stack.Screen name="(auth)" />
-      </Stack>
+      <AuthContext.Provider
+        value={{
+          isRecovering,
+          setIsRecovering,
+        }}
+      >
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(main)" />
+          <Stack.Screen name="(auth)" />
+        </Stack>
+      </AuthContext.Provider>
     </GestureHandlerRootView>
   );
 }

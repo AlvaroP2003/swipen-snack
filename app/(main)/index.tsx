@@ -14,7 +14,7 @@ export default function Homescreen() {
       />
       <TouchableOpacity
         style={styles.joinContainer}
-        onPress={() => router.push("/(main)/joinRoom")}
+        onPress={() => router.push("/(main)/gameScreen")}
       >
         <Text style={styles.joinText}>JOIN ROOM</Text>
       </TouchableOpacity>
